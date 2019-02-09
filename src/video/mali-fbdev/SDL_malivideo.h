@@ -37,6 +37,12 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+typedef struct fbdev_window
+{
+	unsigned short width;
+	unsigned short height;
+} fbdev_window;
+
 typedef struct SDL_DisplayData
 {
     struct fbdev_window native_display;
