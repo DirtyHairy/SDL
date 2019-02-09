@@ -745,6 +745,7 @@ infodir
 docdir
 oldincludedir
 includedir
+runstatedir
 localstatedir
 sharedstatedir
 sysconfdir
@@ -844,6 +845,7 @@ enable_video_x11_scrnsaver
 enable_video_x11_xshape
 enable_video_x11_vm
 enable_video_vivante
+enable_video_mali
 enable_video_cocoa
 enable_render_metal
 enable_video_directfb
@@ -924,6 +926,7 @@ datadir='${datarootdir}'
 sysconfdir='${prefix}/etc'
 sharedstatedir='${prefix}/com'
 localstatedir='${prefix}/var'
+runstatedir='${localstatedir}/run'
 includedir='${prefix}/include'
 oldincludedir='/usr/include'
 docdir='${datarootdir}/doc/${PACKAGE}'
@@ -1176,6 +1179,15 @@ do
   | -silent | --silent | --silen | --sile | --sil)
     silent=yes ;;
 
+  -runstatedir | --runstatedir | --runstatedi | --runstated \
+  | --runstate | --runstat | --runsta | --runst | --runs \
+  | --run | --ru | --r)
+    ac_prev=runstatedir ;;
+  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
+  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
+  | --run=* | --ru=* | --r=*)
+    runstatedir=$ac_optarg ;;
+
   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
     ac_prev=sbindir ;;
   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
@@ -1313,7 +1325,7 @@ fi
 for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
 		datadir sysconfdir sharedstatedir localstatedir includedir \
 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
-		libdir localedir mandir
+		libdir localedir mandir runstatedir
 do
   eval ac_val=\$$ac_var
   # Remove trailing slashes.
@@ -1466,6 +1478,7 @@ Fine tuning of the installation directories:
   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
+  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
   --libdir=DIR            object code libraries [EPREFIX/lib]
   --includedir=DIR        C header files [PREFIX/include]
   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
@@ -1594,6 +1607,7 @@ Optional Features:
                           enable X11 XShape support [[default=yes]]
   --enable-video-x11-vm   use X11 VM extension for fullscreen [[default=yes]]
   --enable-video-vivante  use Vivante EGL video driver [[default=yes]]
+  --enable-video-mali     use Mali EGL video driver [[default=yes]]
   --enable-video-cocoa    use Cocoa video driver [[default=yes]]
   --enable-render-metal   enable the Metal render driver [[default=yes]]
   --enable-video-directfb use DirectFB video driver [[default=no]]
@@ -21190,6 +21204,56 @@ $as_echo "#define SDL_VIDEO_DRIVER_VIVANTE_VDK 1" >>confdefs.h
     fi
 }
 
+CheckMaliVideo()
+{
+    # Check whether --enable-video-mali was given.
+if test "${enable_video_mali+set}" = set; then :
+  enableval=$enable_video_mali;
+else
+  enable_video_mali=yes
+fi
+
+    if test x$enable_video = xyes -a x$enable_video_mali = xyes; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Mali FB API" >&5
+$as_echo_n "checking for Mali FB API... " >&6; }
+        have_mali_egl=no
+        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+          #define LINUX
+          #define EGL_API_FB
+          #include <EGL/egl.h>
+
+int
+main ()
+{
+
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+
+        have_mali_egl=yes
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: $have_mali_egl" >&5
+$as_echo "$have_mali_egl" >&6; }
+
+        if test x$have_mali_egl = xyes; then
+
+$as_echo "#define SDL_VIDEO_DRIVER_MALI 1" >>confdefs.h
+
+            EXTRA_CFLAGS="$EXTRA_CFLAGS -DLINUX -DEGL_API_FB"
+            SOURCES="$SOURCES $srcdir/src/video/mali-fbdev/*.c"
+            SUMMARY_video="${SUMMARY_video} mali"
+            have_video=yes
+        fi
+    fi
+}
+
 CheckHaikuVideo()
 {
     if test x$enable_video = xyes; then
@@ -24032,6 +24096,7 @@ case "$host" in
         CheckClockGettime
         CheckLinuxVersion
         CheckRPATH
+        CheckMaliVideo
         CheckVivanteVideo
 
         # Set up files for the audio library
