@@ -31,6 +31,11 @@
 #ifdef __IPHONEOS__
 #include <OpenGLES/ES2/gl.h>
 #include <OpenGLES/ES2/glext.h>
+#elif defined(SDL_VIDEO_DRIVER_MALI)
+#include "SDL_opengles2_khrplatform.h"
+#include "SDL_opengles2_gl2platform.h"
+#include "SDL_opengles2_gl2.h"
+#include "SDL_opengles2_gl2ext.h"
 #else
 #include <GLES2/gl2platform.h>
 #include <GLES2/gl2.h>
