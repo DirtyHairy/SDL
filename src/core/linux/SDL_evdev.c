@@ -23,7 +23,7 @@
 #ifdef SDL_INPUT_LINUXEV
 
 /* This is based on the linux joystick driver */
-/* References: https://www.kernel.org/doc/Documentation/input/input.txt 
+/* References: https://www.kernel.org/doc/Documentation/input/input.txt
  *             https://www.kernel.org/doc/Documentation/input/event-codes.txt
  *             /usr/include/linux/input.h
  *             The evtest application is also useful to debug the protocol
@@ -33,6 +33,9 @@
 #include "SDL_evdev_kbd.h"
 
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -109,6 +112,7 @@ typedef struct SDL_EVDEV_PrivateData
 #define _THIS SDL_EVDEV_PrivateData *_this
 static _THIS = NULL;
 
+static void SDL_EVDEV_manual_scan();
 static SDL_Scancode SDL_EVDEV_translate_keycode(int keycode);
 static void SDL_EVDEV_sync_device(SDL_evdevlist_item *item);
 static int SDL_EVDEV_device_removed(const char *dev_path);
@@ -157,7 +161,7 @@ SDL_EVDEV_Init(void)
         /* Force a scan to build the initial device list */
         SDL_UDEV_Scan();
 #else
-        /* TODO: Scan the devices manually, like a caveman */
+        SDL_EVDEV_manual_scan();
 #endif /* SDL_USE_LIBUDEV */
 
         _this->kbd = SDL_EVDEV_kbd_init();
@@ -199,6 +203,68 @@ SDL_EVDEV_Quit(void)
     }
 }
 
+void
+SDL_EVDEV_manual_scan()
+{
+    struct dirent* entry;
+    DIR* dir;
+
+    dir = opendir("/dev/input");
+    if (!dir) {
+        return;
+    }
+
+    while ((entry = readdir(dir))) {
+        SDL_evdevlist_item *item;
+        char path[20];
+
+        if (strstr(entry->d_name, "event") != entry->d_name) {
+            continue;
+        }
+
+        item = (SDL_evdevlist_item *) SDL_calloc(1, sizeof (SDL_evdevlist_item));
+        if (item == NULL) {
+            SDL_OutOfMemory();
+            closedir(dir);
+            return;
+        }
+
+        strncpy(path, "/dev/input/", 20);
+        strncat(path, entry->d_name, 20);
+        path[19] = 0;
+
+        item->fd = open(path, O_RDONLY | O_NONBLOCK);
+        if (item->fd < 0) {
+            SDL_free(item);
+            SDL_SetError("Unable to open %s", path);
+            closedir(dir);
+            return;
+        }
+
+        item->path = SDL_strdup(path);
+        if (item->path == NULL) {
+            close(item->fd);
+            SDL_free(item);
+            SDL_OutOfMemory();
+            closedir(dir);
+            return;
+        }
+
+        if (_this->last == NULL) {
+            _this->first = _this->last = item;
+        } else {
+            _this->last->next = item;
+            _this->last = item;
+        }
+
+        SDL_EVDEV_sync_device(item);
+
+        _this->num_devices++;
+    }
+
+    closedir(dir);
+}
+
 #if SDL_USE_LIBUDEV
 static void SDL_EVDEV_udev_callback(SDL_UDEV_deviceevent udev_event, int udev_class,
     const char* dev_path)
@@ -214,7 +280,7 @@ static void SDL_EVDEV_udev_callback(SDL_UDEV_deviceevent udev_event, int udev_cl
             return;
 
         SDL_EVDEV_device_added(dev_path, udev_class);
-        break;  
+        break;
     case SDL_UDEV_DEVICEREMOVED:
         SDL_EVDEV_device_removed(dev_path);
         break;
@@ -224,7 +290,7 @@ static void SDL_EVDEV_udev_callback(SDL_UDEV_deviceevent udev_event, int udev_cl
 }
 #endif /* SDL_USE_LIBUDEV */
 
-void 
+void
 SDL_EVDEV_Poll(void)
 {
     struct input_event events[32];
@@ -435,7 +501,7 @@ SDL_EVDEV_Poll(void)
                     break;
                 }
             }
-        }    
+        }
     }
 }
 
@@ -568,7 +634,7 @@ SDL_EVDEV_destroy_touchscreen(SDL_evdevlist_item* item) {
 }
 
 static void
-SDL_EVDEV_sync_device(SDL_evdevlist_item *item) 
+SDL_EVDEV_sync_device(SDL_evdevlist_item *item)
 {
 #ifdef EVIOCGMTSLOTS
     int i, ret;
