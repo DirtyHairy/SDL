@@ -203,11 +203,20 @@ SDL_EVDEV_Quit(void)
     }
 }
 
+
+#define test_bit(nr, addr) \
+    (((1UL << ((nr) % (sizeof(long) * 8))) & ((addr)[(nr) / (sizeof(long) * 8)])) != 0)
+#define NBITS(x) ((((x)-1)/(sizeof(long) * 8))+1)
+
 void
 SDL_EVDEV_manual_scan()
 {
     struct dirent* entry;
     DIR* dir;
+
+    unsigned long evbit[NBITS(EV_MAX)] = { 0 };
+    unsigned long keybit[NBITS(KEY_MAX)] = { 0 };
+    unsigned long absbit[NBITS(ABS_MAX)] = { 0 };
 
     dir = opendir("/dev/input");
     if (!dir) {
@@ -239,6 +248,23 @@ SDL_EVDEV_manual_scan()
             SDL_SetError("Unable to open %s", path);
             closedir(dir);
             return;
+        }
+
+        if ((ioctl(item->fd, EVIOCGBIT(0, sizeof(evbit)), evbit) < 0) ||
+            (ioctl(item->fd, EVIOCGBIT(EV_KEY, sizeof(keybit)), keybit) < 0) ||
+            (ioctl(item->fd, EVIOCGBIT(EV_ABS, sizeof(absbit)), absbit) < 0))
+        {
+            SDL_free(item);
+            close(item->fd);
+            continue;
+        }
+
+        if (test_bit(EV_KEY, evbit) && test_bit(EV_ABS, evbit) &&
+            test_bit(ABS_X, absbit) && test_bit(ABS_Y, absbit))
+        {
+            SDL_free(item);
+            close(item->fd);
+            continue;
         }
 
         item->path = SDL_strdup(path);
